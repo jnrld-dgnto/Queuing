@@ -45,6 +45,8 @@ public sealed class VisitIssuanceService(QueueDbContext db, TimeProvider clock)
         var appointmentAtUtc = VisitCommandSupport.ParseClinicLocalTime(request.AppointmentAtLocal);
         if (appointmentAtUtc.IsInvalid)
             return VisitIssueResult.Failure(400, "Appointment time must use YYYY-MM-DDTHH:mm in the clinic timezone.");
+        var referenceId = string.IsNullOrWhiteSpace(request.ReferenceId) ? null : request.ReferenceId.Trim();
+        if (referenceId?.Length > 50) return VisitIssueResult.Failure(400, "Reference ID cannot exceed 50 characters.");
         if (request.InitialServiceId == Guid.Empty) return VisitIssueResult.Failure(400, "Choose an active service.");
         var service = await db.Services.AsNoTracking()
             .Where(item => item.Id == request.InitialServiceId && item.Active && item.Department.Active)
@@ -63,7 +65,8 @@ public sealed class VisitIssuanceService(QueueDbContext db, TimeProvider clock)
             VisitCode = dailySequence.LastSequence.ToString("D3", CultureInfo.InvariantCulture),
             IssuedByUserId = userId,
             IssuedByKioskDeviceId = kioskDeviceId,
-            IssuedAtUtc = now
+            IssuedAtUtc = now,
+            ReferenceId = referenceId
         };
         db.Visits.Add(visit);
         await db.SaveChangesAsync(cancellationToken);
@@ -84,7 +87,7 @@ public sealed class VisitIssuanceService(QueueDbContext db, TimeProvider clock)
         visit.CurrentStepId = step.Id;
         var receipt = new IssuedVisitDto(
             visit.Id, visit.VisitCode, clinicDate, service.Id, service.Name, service.DepartmentId,
-            service.DepartmentName, step.AppointmentAtUtc, visit.IssuedAtUtc, departmentTicketNumber);
+            service.DepartmentName, step.AppointmentAtUtc, visit.IssuedAtUtc, departmentTicketNumber, ReferenceId: referenceId);
         VisitCommandSupport.SaveCommand(db, clock, scope, key, requestHash, visit.Id, receipt);
         VisitCommandSupport.AddAudit(db, clock, userId, correlationId, "visit.issued", "visit", visit.Id, kioskDeviceId);
         VisitCommandSupport.AddOutbox(db, clock, visit.Id, service.DepartmentId);
@@ -101,8 +104,8 @@ public sealed record VisitIssueResult(IssuedVisitDto? Receipt, string? Error, in
     public static VisitIssueResult Created(IssuedVisitDto receipt) => new(receipt, null, 201, false);
 }
 
-public sealed record IssueVisitRequest(Guid InitialServiceId, string? AppointmentAtLocal);
-public sealed record IssuedVisitDto(Guid Id, string VisitCode, DateOnly ClinicDate, Guid? ServiceId, string? ServiceName, Guid DepartmentId, string DepartmentName, DateTimeOffset? AppointmentAtUtc, DateTimeOffset IssuedAtUtc, int? DepartmentTicketNumber = null)
+public sealed record IssueVisitRequest(Guid InitialServiceId, string? AppointmentAtLocal, string? ReferenceId = null);
+public sealed record IssuedVisitDto(Guid Id, string VisitCode, DateOnly ClinicDate, Guid? ServiceId, string? ServiceName, Guid DepartmentId, string DepartmentName, DateTimeOffset? AppointmentAtUtc, DateTimeOffset IssuedAtUtc, int? DepartmentTicketNumber = null, bool IsReprint = false, string? ReferenceId = null)
 {
     public string TicketNumber => DepartmentTicketNumber?.ToString("D3", CultureInfo.InvariantCulture) ?? VisitCode;
 }

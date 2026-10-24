@@ -6,7 +6,7 @@ This map describes the current SPEC-005 queue, SPEC-006 Admin configuration, SPE
 
 | Path | Responsibility |
 |---|---|
-| `backend/Queuing.Api/Program.cs` | ASP.NET Core composition root, MySQL/EF configuration, Identity cookies, antiforgery, rate limits, policies, loopback-guarded local setup principal, health routes, SignalR, and outbox startup. |
+| `backend/Queuing.Api/Program.cs` | ASP.NET Core composition root, MySQL/EF configuration, startup migration execution, Identity cookies, antiforgery, rate limits, policies, loopback-guarded local setup principal, health routes, SignalR, and outbox startup. |
 | `backend/Queuing.Api/Auth/` | One-time admin bootstrap, role constants, Service/legacy Department queue authorization, separate DisplayDevice/KioskDevice authentication, password-change claims, and `LocalSetupAccess` checks. |
 | `backend/Queuing.Api/Controllers/AuthController.cs` | Session, login/logout, CSRF token, and forced password change. |
 | `backend/Queuing.Api/Controllers/AdminUsersController.cs` | Admin-provisioned accounts, roles, Service assignments, temporary credential, deletion safeguards, and audit. |
@@ -17,13 +17,13 @@ This map describes the current SPEC-005 queue, SPEC-006 Admin configuration, SPE
 | `backend/Queuing.Api/Controllers/LobbyDisplaysController.cs` | Lobby-only all-active-department snapshot and paired-lobby video list/range reads. |
 | `backend/Queuing.Api/Controllers/DisplayVideosController.cs` | Admin playlist URL/upload/list/removal, CSRF-protected audited writes, and local media storage paths. |
 | `backend/Queuing.Api/Controllers/KiosksController.cs` | Admin kiosk lifecycle and pairing; narrow paired-device choices, walk-in issue, and logout endpoints. |
-| `backend/Queuing.Api/Controllers/ReceptionVisitsController.cs` | Authenticated active-Service choices, service-based visit issue, visit-ID compatibility lookup, and original receipt lookup by clinic date/code. |
+| `backend/Queuing.Api/Controllers/ReceptionVisitsController.cs` | Authenticated active-Service choices, service-based visit issue with optional Reference ID, visit-ID compatibility lookup, and audited original receipt lookup by clinic date/code or Chart/Reference ID. |
 | `backend/Queuing.Api/Controllers/VisitCommandsController.cs` | Service-filtered Staff queue, assigned-Service call-next, no-show requeue, and current-Service-authorized complete/forward commands. |
 | `backend/Queuing.Api/Services/VisitCommandSupport.cs` | Shared idempotency, clinic-time parsing, audit, and outbox helpers used by visit commands. |
 | `backend/Queuing.Api/Services/VisitIssuanceService.cs` | Shared database transaction for Reception/kiosk issue, clinic and Department daily sequences, idempotency, issuer audit, and outbox. |
 | `backend/Queuing.Api/Services/VisitCommandSupport.cs` | Shared idempotency, clinic-time parsing, transactional Department sequence allocation, audit, and outbox helpers. |
 | `backend/Queuing.Api/Data/QueueDbContext.cs` | Identity, Department and Service staff assignments, Service/Station associations, Department/lobby display devices and video metadata, Kiosk devices, exclusive Visit issuer constraint, daily Department ticket counters, and clinic queue indexes. |
-| `backend/Queuing.Api/Data/Migrations/` | MySQL initial schema, queue timestamp precision, Service/Station configuration, service-linked visit steps, kiosk device/issuer migration, Service-scoped Staff assignment/backfill, lobby display/video migration, Department sequence migration, and model snapshots. |
+| `backend/Queuing.Api/Data/Migrations/` | MySQL initial schema, queue timestamp precision, Service/Station configuration, service-linked visit steps, kiosk device/issuer migration, Service-scoped Staff assignment/backfill, lobby display/video migration, Department sequence migration, Visit reference ID migration, and model snapshots. |
 | `backend/Queuing.Api/Data/QueueDbContextFactory.cs` | EF design-time connection configuration for migrations. |
 | `backend/Queuing.Api/Services/QueueOutboxDispatcher.cs` | Dispatches committed queue and Department-configuration invalidations only to active paired device-generation groups. |
 | `backend/Queuing.Api/Hubs/QueueHub.cs` | Device-authenticated, per-display-generation notification groups for Department and lobby devices; no queue commands. |
@@ -44,7 +44,7 @@ This map describes the current SPEC-005 queue, SPEC-006 Admin configuration, SPE
 | `frontend/src/features/admin/AdminNavigation.jsx`, `adminSections.js` | Collapsible Admin sidebar group and direct routes for Departments, Services, Users & access, Stations, Displays, and Kiosks. |
 | `frontend/src/features/admin/sections/` | One React page per admin configuration area; Departments supports deactivation/reactivation; Users supports account deletion with confirmation; Displays manages Department/lobby devices and the shared lobby video playlist. |
 | `frontend/src/features/admin/components/` | Shared section heading and API feedback UI used by admin pages. |
-| `frontend/src/features/reception/ReceptionPage.jsx` | Department ticket issue, visit-code receipt lookup, and browser print. |
+| `frontend/src/features/reception/ReceptionPage.jsx` | Department ticket issue with optional Reference ID, visit-code/reference receipt lookup, and browser print. |
 | `frontend/src/features/department/DepartmentQueuePage.jsx` | Service-scoped Department ticket rows, call-next, no-show requeue, completion, and forwarding. |
 | `frontend/src/features/display/` | One-time pairing route, Department-number monitor, and multi-department lobby board with muted autoplay and a looping playlist. |
 | `frontend/src/features/kiosk/` | Standalone kiosk pairing and responsive Department → Service → confirmation → Department ticket issue flow. |

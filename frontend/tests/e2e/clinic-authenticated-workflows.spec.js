@@ -162,7 +162,7 @@ async function mockApi(page, initialRole = null, forcePasswordChange = false, op
       const service = availableServices.find((item) => item.id === body.initialServiceId);
       return json({ id: "visit-new", visitCode: "003", ticketNumber: "001", departmentTicketNumber: 1, clinicDate: "2026-10-21", serviceId: service.id, serviceName: service.name, departmentId: service.departmentId, departmentName: service.departmentName, appointmentAtUtc: null, issuedAtUtc: "2026-10-20T00:00:00Z" }, 201);
     }
-    if (path === "/reception/visits/receipt" && method === "GET") return json({ id: "visit-new", visitCode: url.searchParams.get("visitCode"), ticketNumber: "001", departmentTicketNumber: 1, clinicDate: url.searchParams.get("clinicDate"), serviceId: "service-xray", serviceName: "Imaging", departmentId: "dept-xray", departmentName: "X-ray", issuedAtUtc: "2026-10-20T00:00:00Z" });
+    if (path === "/reception/visits/receipt" && method === "GET") return json({ id: "visit-new", visitCode: url.searchParams.get("visitCode"), ticketNumber: "001", departmentTicketNumber: 1, clinicDate: url.searchParams.get("clinicDate"), serviceId: "service-xray", serviceName: "Imaging", departmentId: "dept-xray", departmentName: "X-ray", issuedAtUtc: "2026-10-20T00:00:00Z", isReprint: true });
     return route.fulfill({ status: 404, contentType: "application/problem+json", body: JSON.stringify({ detail: `Unhandled mock route: ${method} ${path}` }) });
   });
   return { requests, departments };
@@ -340,6 +340,10 @@ test("reception issues a service-linked Asia/Manila appointment and reprints by 
   await page.getByRole("button", { name: "Issue visit" }).click();
   await expect(page.locator(".receipt-number")).toHaveText("001");
   await expect(page.locator(".receipt-reference")).toContainText("003");
+  await expect(page.locator(".reception-toast")).toBeVisible();
+  await expect(page.locator(".reception-toast-message")).toHaveText("Ticket 001 issued for Imaging.");
+  await page.getByRole("button", { name: "Close notification" }).click();
+  await expect(page.locator(".reception-toast")).toHaveCount(0);
   const issued = requests.find((entry) => entry.path === "/visits" && entry.method === "POST");
   expect(issued.body).toEqual({ initialServiceId: "service-xray", appointmentAtLocal: "2026-10-20T09:30" });
   expect(issued.headers["idempotency-key"]).toBeTruthy();
@@ -350,6 +354,8 @@ test("reception issues a service-linked Asia/Manila appointment and reprints by 
   await page.getByRole("button", { name: "Find visit" }).click();
   await expect(page.locator(".receipt-number")).toHaveText("001");
   await expect(page.locator(".receipt-reference")).toContainText("003");
+  await expect(page.locator(".receipt-reprint-banner")).toBeVisible();
+  await expect(page.locator(".reception-reprint-tag")).toHaveText("Reprint");
   const receiptLookup = requests.find((entry) => entry.path.startsWith("/reception/visits/receipt"));
   expect(receiptLookup).toMatchObject({ path: "/reception/visits/receipt", query: "?visitCode=003&clinicDate=2026-10-21" });
 });

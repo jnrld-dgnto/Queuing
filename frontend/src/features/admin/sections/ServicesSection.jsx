@@ -9,6 +9,7 @@ export default function ServicesSection() {
   const [services, setServices] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -34,6 +35,7 @@ export default function ServicesSection() {
   }, [load]);
 
   async function act(action, success) {
+    setSubmitting(true);
     setError("");
     setMessage("");
     try {
@@ -44,6 +46,8 @@ export default function ServicesSection() {
     } catch (cause) {
       setError(cause.message);
       return null;
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -82,7 +86,7 @@ export default function ServicesSection() {
       />
       <AdminFeedback error={error} message={message} />
       {loading && <p role="status" className="panel-description">Loading services…</p>}
-      {!loading && departments.filter((item) => item.active).length === 0 && <p className="panel-description">Add an active department before creating services. <Link to="/admin/departments">Go to Departments</Link></p>}
+      {!loading && !error && departments.filter((item) => item.active).length === 0 && <p className="panel-description">Add an active department before creating services. <Link to="/admin/departments">Go to Departments</Link></p>}
       {!loading && departments.some((item) => item.active) && services.length === 0 && <p className="panel-description">No services are configured yet. Add a service and assign it to a department.</p>}
       {showCreate && <form className="admin-inline-form" onSubmit={createService}>
         <h3>Add service</h3>
@@ -93,7 +97,8 @@ export default function ServicesSection() {
           <option value="" disabled>Select a department</option>
           {departments.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
-        <button className="button button-dark" type="submit">Save service</button>
+        {error && <p className="action-message" role="alert">{error}</p>}
+        <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Saving service…" : "Save service"}</button>
       </form>}
       <div className="admin-record-list">{services.map((service) => (
         <article className="admin-record" key={service.id}>
@@ -102,7 +107,7 @@ export default function ServicesSection() {
             <label htmlFor={`service-name-${service.id}`}>Service name</label>
             <input id={`service-name-${service.id}`} name="name" defaultValue={service.name} required minLength="2" maxLength="100" />
             <label className="checkbox-row"><input type="checkbox" name="active" defaultChecked={service.active} /> Active</label>
-            <div className="admin-form-actions"><button className="button button-dark" type="submit">Save service</button><button className="text-button" type="button" onClick={() => setEditingId("")}>Cancel</button></div>
+            <div className="admin-form-actions"><button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Saving service…" : "Save service"}</button><button className="text-button" type="button" onClick={() => setEditingId("")}>Cancel</button></div>
           </form> : <button className="text-button" type="button" onClick={() => setEditingId(service.id)}>Edit service</button>}
         </article>
       ))}</div>

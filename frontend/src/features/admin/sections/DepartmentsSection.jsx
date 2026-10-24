@@ -6,6 +6,7 @@ import AdminSectionHeader from "../components/AdminSectionHeader.jsx";
 export default function DepartmentsSection() {
   const [departments, setDepartments] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -29,6 +30,7 @@ export default function DepartmentsSection() {
   }, [load]);
 
   async function act(action, success) {
+    setSubmitting(true);
     setError("");
     setMessage("");
     try {
@@ -39,6 +41,8 @@ export default function DepartmentsSection() {
     } catch (cause) {
       setError(cause.message);
       return null;
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -64,12 +68,13 @@ export default function DepartmentsSection() {
       />
       <AdminFeedback error={error} message={message} />
       {loading && <p role="status" className="panel-description">Loading departments…</p>}
-      {!loading && departments.length === 0 && <p className="panel-description">No departments are configured yet. Add a department to define where clinic services are handled.</p>}
+      {!loading && !error && departments.length === 0 && <p className="panel-description">No departments are configured yet. Add a department to define where clinic services are handled.</p>}
       {showCreate && <form className="admin-inline-form" onSubmit={createDepartment}>
         <h3>Add department</h3>
         <label htmlFor="new-department">Department name</label>
         <input id="new-department" name="name" required minLength="2" maxLength="100" />
-        <button className="button button-dark" type="submit">Save department</button>
+        {error && <p className="action-message" role="alert">{error}</p>}
+        <button className="button button-dark" type="submit" disabled={submitting}>{submitting ? "Saving department…" : "Save department"}</button>
       </form>}
       {departments.length > 0 && <ul className="settings-list admin-department-list">{departments.map((department) => (
         <li key={department.id}>

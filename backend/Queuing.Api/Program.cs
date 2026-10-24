@@ -147,6 +147,12 @@ if (bootstrapAdmin)
     return;
 }
 
+await using (var migrationScope = app.Services.CreateAsyncScope())
+{
+    var db = migrationScope.ServiceProvider.GetRequiredService<QueueDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 await app.RunAsync();
 
 public partial class Program;

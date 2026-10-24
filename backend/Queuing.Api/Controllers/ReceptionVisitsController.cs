@@ -10,7 +10,7 @@ namespace Queuing.Api.Controllers;
 
 [ApiController]
 [Route("api/v1")]
-public sealed class ReceptionVisitsController(QueueDbContext db, VisitIssuanceService visitIssuance) : ControllerBase
+public sealed class ReceptionVisitsController(QueueDbContext db, VisitIssuanceService visitIssuance, TimeProvider clock) : ControllerBase
 {
     [HttpGet("services/available")]
     [Authorize(Policy = QueueRoles.QueueServices)]
@@ -50,37 +50,74 @@ public sealed class ReceptionVisitsController(QueueDbContext db, VisitIssuanceSe
     [Authorize(Policy = QueueRoles.Reception)]
     public async Task<IActionResult> FindReceipt(
         [FromQuery] string? visitCode,
+        [FromQuery] string? referenceId,
         [FromQuery] string? clinicDate,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(visitCode) || !int.TryParse(visitCode, NumberStyles.None, CultureInfo.InvariantCulture, out var sequence) ||
-            sequence < 1 || visitCode != sequence.ToString("D3", CultureInfo.InvariantCulture) ||
-            !DateOnly.TryParseExact(clinicDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-            return Problem(statusCode: 400, title: "Enter a canonical visit code and clinic date (YYYY-MM-DD).");
+        if (!DateOnly.TryParseExact(clinicDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            return Problem(statusCode: 400, title: "Enter a valid clinic date (YYYY-MM-DD).");
 
-        var receipt = await (
-            from step in db.DepartmentSteps.AsNoTracking()
-            join visit in db.Visits.AsNoTracking() on step.VisitId equals visit.Id
-            where visit.ClinicDate == date && visit.Sequence == sequence
-            orderby step.EnteredAtUtc, step.Id
-            select new
-            {
-                visit.Id,
-                visit.VisitCode,
-                visit.ClinicDate,
-                visit.IssuedAtUtc,
-                step.ServiceId,
-                ServiceName = step.Service == null ? null : step.Service.Name,
-                step.DepartmentId,
-                DepartmentName = step.Department.Name,
-                step.AppointmentAtUtc,
-                step.DepartmentTicketNumber
-            })
+        int? sequence = null;
+        if (!string.IsNullOrWhiteSpace(visitCode))
+        {
+            if (!int.TryParse(visitCode, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedSequence) ||
+                parsedSequence < 1 || visitCode != parsedSequence.ToString("D3", CultureInfo.InvariantCulture))
+                return Problem(statusCode: 400, title: "Enter a canonical visit code (e.g. 001).");
+            sequence = parsedSequence;
+        }
+
+        var refId = string.IsNullOrWhiteSpace(referenceId) ? null : referenceId.Trim();
+        if (refId?.Length > 50)
+            return Problem(statusCode: 400, title: "Reference ID cannot exceed 50 characters.");
+
+        if (sequence is null && refId is null)
+            return Problem(statusCode: 400, title: "Enter a visit code or reference ID.");
+
+        var query = from step in db.DepartmentSteps.AsNoTracking()
+                    join visit in db.Visits.AsNoTracking() on step.VisitId equals visit.Id
+                    where visit.ClinicDate == date
+                    select new
+                    {
+                        visit.Id,
+                        visit.VisitCode,
+                        visit.Sequence,
+                        visit.ReferenceId,
+                        visit.ClinicDate,
+                        visit.IssuedAtUtc,
+                        step.ServiceId,
+                        ServiceName = step.Service == null ? null : step.Service.Name,
+                        step.DepartmentId,
+                        DepartmentName = step.Department.Name,
+                        step.AppointmentAtUtc,
+                        step.DepartmentTicketNumber,
+                        step.EnteredAtUtc,
+                        StepId = step.Id
+                    };
+
+        if (sequence.HasValue)
+        {
+            query = query.Where(item => item.Sequence == sequence.Value);
+        }
+        else if (refId is not null)
+        {
+            query = query.Where(item => item.ReferenceId == refId);
+        }
+
+        var receipt = await query
+            .OrderByDescending(item => item.Sequence)
+            .ThenBy(item => item.EnteredAtUtc)
+            .ThenBy(item => item.StepId)
             .FirstOrDefaultAsync(cancellationToken);
+
         if (receipt is null) return NotFound();
+
+        var userId = VisitCommandSupport.CurrentUserId(User);
+        VisitCommandSupport.AddAudit(db, clock, userId, HttpContext.TraceIdentifier, "visit.reprinted", "visit", receipt.Id);
+        await db.SaveChangesAsync(cancellationToken);
         return Ok(new IssuedVisitDto(
             receipt.Id, receipt.VisitCode, receipt.ClinicDate, receipt.ServiceId, receipt.ServiceName,
-            receipt.DepartmentId, receipt.DepartmentName, receipt.AppointmentAtUtc, receipt.IssuedAtUtc, receipt.DepartmentTicketNumber));
+            receipt.DepartmentId, receipt.DepartmentName, receipt.AppointmentAtUtc, receipt.IssuedAtUtc, receipt.DepartmentTicketNumber,
+            IsReprint: true, ReferenceId: receipt.ReferenceId));
     }
 }
 

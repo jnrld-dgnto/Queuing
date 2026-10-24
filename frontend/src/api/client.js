@@ -15,7 +15,7 @@ async function decode(response) {
   if (response.ok && body?.requestToken) requestToken = body.requestToken;
   if (!response.ok) {
     throw new ApiError(
-      body?.detail || body?.title || "The clinic queue service could not complete the request.",
+      body?.detail || body?.title || (response.status === 403 ? "You do not have permission to perform this action. If you are signed in as Reception or Staff, click Sign out." : "The clinic queue service could not complete the request."),
       response.status,
       body,
     );
@@ -144,8 +144,14 @@ export const visitsApi = {
     body: JSON.stringify(visit),
   }),
   get: (id, signal) => api(`/visits/${encodeURIComponent(id)}`, { signal }),
-  receipt: (visitCode, clinicDate, signal) => {
-    const query = new URLSearchParams({ visitCode, clinicDate });
+  receipt: (lookup, clinicDate, signal) => {
+    const trimmed = typeof lookup === "string" ? lookup.trim() : "";
+    const params = typeof lookup === "object" && lookup !== null
+      ? { ...lookup, clinicDate }
+      : /^\d{1,3}$/.test(trimmed)
+        ? { visitCode: trimmed.padStart(3, "0"), clinicDate }
+        : { referenceId: trimmed, clinicDate };
+    const query = new URLSearchParams(params);
     return api(`/reception/visits/receipt?${query}`, { signal });
   },
 };

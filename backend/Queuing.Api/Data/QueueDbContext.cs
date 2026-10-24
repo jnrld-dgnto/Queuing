@@ -146,7 +146,9 @@ public sealed class QueueDbContext(DbContextOptions<QueueDbContext> options)
                 "(`IssuedByUserId` IS NOT NULL AND `IssuedByKioskDeviceId` IS NULL) OR (`IssuedByUserId` IS NULL AND `IssuedByKioskDeviceId` IS NOT NULL)"));
             entity.Property(visit => visit.ClinicDate).HasConversion(ClinicDateConverter).HasColumnType("date");
             entity.Property(visit => visit.VisitCode).HasMaxLength(12).IsRequired();
+            entity.Property(visit => visit.ReferenceId).HasMaxLength(50);
             entity.HasIndex(visit => new { visit.ClinicDate, visit.Sequence }).IsUnique();
+            entity.HasIndex(visit => new { visit.ClinicDate, visit.ReferenceId });
             entity.HasOne(visit => visit.IssuedBy)
                 .WithMany()
                 .HasForeignKey(visit => visit.IssuedByUserId)
@@ -334,6 +336,7 @@ public sealed class Visit
     public DateOnly ClinicDate { get; set; }
     public int Sequence { get; set; }
     public string VisitCode { get; set; } = "";
+    public string? ReferenceId { get; set; }
     public bool Completed { get; set; }
     public Guid? IssuedByUserId { get; set; }
     public QueueUser? IssuedBy { get; set; }
